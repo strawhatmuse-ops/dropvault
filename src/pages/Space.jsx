@@ -11,8 +11,11 @@ import {
   unlockFlagKey,
 } from '../lib/helpers.js';
 import UploadZone, { UploadItem } from '../components/UploadZone.jsx';
+import FileIcon from '../components/FileIcon.jsx';
 
 const BUCKET = 'filedrop';
+const FILE_COLS = 'id, file_name, storage_path, size_bytes, mime_type, created_at';
+const MAX_FILE_BYTES = 100 * 1024 * 1024; // 100MB client-side cap
 let uploadSeq = 0;
 
 export default function Space() {
@@ -20,29 +23,31 @@ export default function Space() {
   const [phase, setPhase] = useState('loading'); // loading | invalid | claim | unlock | open | error
   const [fatal, setFatal] = useState('');
   const [space, setSpace] = useState(null);
-  const [files, setFiles] = useState([]);
+  const [file, setFile] = useState(null); // single file per space
 
   const [password, setPassword] = useState('');
   const [confirm, setConfirm] = useState('');
   const [busy, setBusy] = useState(false);
   const [formError, setFormError] = useState('');
 
-  const [uploads, setUploads] = useState([]);
+  const [upload, setUpload] = useState(null); // single in-flight upload
   const [copied, setCopied] = useState(false);
   const slugRef = useRef(slug);
   slugRef.current = slug;
 
-  const loadFiles = useCallback(async (spaceId) => {
+  const loadFile = useCallback(async (spaceId) => {
     const { data, error } = await supabase
       .from('filedrop_files')
-      .select('id, file_name, storage_path, size_bytes, mime_type, created_at')
+      .select(FILE_COLS)
       .eq('space_id', spaceId)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: false })
+      .limit(1)
+      .maybeSingle();
     if (error) {
-      setFatal(`Could not load files: ${error.message}`);
+      setFatal(`Could not load the file: ${error.message}`);
       return;
     }
-    setFiles(data || []);
+    setFile(data || null);
   }, []);
 
   // Fetch the space on slug change.
@@ -52,8 +57,8 @@ export default function Space() {
       setPhase('loading');
       setFatal('');
       setSpace(null);
-      setFiles([]);
-      setUploads([]);
+      setFile(null);
+      setUpload(null);
       setPassword('');
       setConfirm('');
       setFormError('');
@@ -79,7 +84,7 @@ export default function Space() {
       }
       setSpace(data);
       if (sessionStorage.getItem(unlockFlagKey(slug)) === '1') {
-        await loadFiles(data.id);
+        await loadFile(data.id);
         if (!cancelled) setPhase('open');
       } else {
         setPhase('unlock');
@@ -89,7 +94,7 @@ export default function Space() {
     return () => {
       cancelled = true;
     };
-  }, [slug, loadFiles]);
+  }, [slug, loadFile]);
 
   async function handleClaim(e) {
     e.preventDefault();
@@ -131,7 +136,7 @@ export default function Space() {
       }
       setSpace(data);
       sessionStorage.setItem(unlockFlagKey(slug), '1');
-      await loadFiles(data.id);
+      await loadFile(data.id);
       setPhase('open');
     } finally {
       setBusy(false);
@@ -154,7 +159,7 @@ export default function Space() {
         return;
       }
       sessionStorage.setItem(unlockFlagKey(slug), '1');
-      await loadFiles(space.id);
+      await loadFile(space.id);
       setPhase('open');
     } finally {
       setBusy(false);
@@ -168,62 +173,86 @@ export default function Space() {
     setFormError('');
   }
 
-  async function handleFilesPicked(fileList) {
-    const picked = Array.from(fileList || []);
-    if (!picked.length || !space) return;
-    const items = picked.map((f) => ({
-      id: `u${++uploadSeq}`,
-      name: f.name,
-      size: f.size,
-      status: 'queued',
-      error: null,
-    }));
-    setUploads((prev) => [...items, ...prev]);
-
-    let anyDone = false;
-    for (let i = 0; i < picked.length; i++) {
-      const file = picked[i];
-      const item = items[i];
-      setUploads((prev) => prev.map((u) => (u.id === item.id ? { ...u, status: 'uploading' } : u)));
-      try {
-        const path = `${space.id}/${randomId()}_${sanitizeFilename(file.name)}`;
-        const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, file);
-        if (upErr) throw upErr;
-        const { error: insErr } = await supabase.from('filedrop_files').insert({
-          space_id: space.id,
-          file_name: file.name,
-          storage_path: path,
-          size_bytes: file.size,
-          mime_type: file.type || null,
-        });
-        if (insErr) {
-          // Metadata write failed — don't orphan bytes.
-          await supabase.storage.from(BUCKET).remove([path]);
-          throw insErr;
-        }
-        anyDone = true;
-        setUploads((prev) => prev.map((u) => (u.id === item.id ? { ...u, status: 'done' } : u)));
-      } catch (err) {
-        setUploads((prev) =>
-          prev.map((u) => (u.id === item.id ? { ...u, status: 'error', error: err.message } : u)),
-        );
-      }
-    }
-    if (anyDone) loadFiles(space.id);
-  }
-
-  async function handleDelete(f) {
-    if (!window.confirm(`Delete "${f.file_name}"? This cannot be undone.`)) return;
-    const { error: storErr } = await supabase.storage.from(BUCKET).remove([f.storage_path]);
-    if (storErr) {
-      alert(`Could not delete the file bytes: ${storErr.message}`);
+  /**
+   * Single-file semantics: uploading a new file REPLACES the old one.
+   * Ordering keeps the old file safe: upload new bytes → insert new row →
+   * only then delete the old object + old row. Any failure keeps the old file.
+   */
+  async function handleFilePicked(fileList) {
+    const picked = fileList && fileList[0];
+    if (!picked || !space) return;
+    if (upload && upload.status === 'uploading') return;
+    if (picked.size > MAX_FILE_BYTES) {
+      setUpload({
+        id: `u${++uploadSeq}`,
+        name: picked.name,
+        size: picked.size,
+        status: 'error',
+        error: `Files up to 100MB — this one is ${humanSize(picked.size)}.`,
+      });
       return;
     }
-    const { error: rowErr } = await supabase.from('filedrop_files').delete().eq('id', f.id);
+    setUpload({
+      id: `u${++uploadSeq}`,
+      name: picked.name,
+      size: picked.size,
+      status: 'uploading',
+      error: null,
+    });
+    const previous = file;
+    try {
+      const path = `${space.id}/${randomId()}_${sanitizeFilename(picked.name)}`;
+      const { error: upErr } = await supabase.storage.from(BUCKET).upload(path, picked);
+      if (upErr) throw upErr;
+      const { data: row, error: insErr } = await supabase
+        .from('filedrop_files')
+        .insert({
+          space_id: space.id,
+          file_name: picked.name,
+          storage_path: path,
+          size_bytes: picked.size,
+          mime_type: picked.type || null,
+        })
+        .select(FILE_COLS)
+        .single();
+      if (insErr) {
+        // Metadata write failed — don't orphan bytes, keep the old file.
+        await supabase.storage.from(BUCKET).remove([path]);
+        throw insErr;
+      }
+      // New file is safely stored — now clean up the old one (best effort).
+      if (previous) {
+        const { error: roErr } = await supabase.storage
+          .from(BUCKET)
+          .remove([previous.storage_path]);
+        const { error: rrErr } = await supabase
+          .from('filedrop_files')
+          .delete()
+          .eq('id', previous.id);
+        if (roErr || rrErr) {
+          console.warn('Old file cleanup failed (new file is live):', roErr, rrErr);
+        }
+      }
+      setFile(row);
+      setUpload((u) => (u ? { ...u, status: 'done' } : u));
+    } catch (err) {
+      setUpload((u) => (u ? { ...u, status: 'error', error: err.message } : u));
+    }
+  }
+
+  async function handleDelete() {
+    if (!file) return;
+    if (!window.confirm(`Delete "${file.file_name}"? This cannot be undone.`)) return;
+    const { error: storErr } = await supabase.storage.from(BUCKET).remove([file.storage_path]);
+    if (storErr) {
+      alert(`Could not delete the file: ${storErr.message}`);
+      return;
+    }
+    const { error: rowErr } = await supabase.from('filedrop_files').delete().eq('id', file.id);
     if (rowErr) {
       alert(`File bytes deleted but the listing entry could not be removed: ${rowErr.message}`);
     }
-    loadFiles(space.id);
+    setFile(null);
   }
 
   function downloadUrl(path) {
@@ -245,8 +274,6 @@ export default function Space() {
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
   }
-
-  const totalBytes = files.reduce((n, f) => n + (Number(f.size_bytes) || 0), 0);
 
   return (
     <div className="page">
@@ -319,7 +346,7 @@ export default function Space() {
             <h2>
               Space <span className="slugname">{slug}</span> is locked
             </h2>
-            <p className="muted">Enter the password to see the files inside.</p>
+            <p className="muted">Enter the password to see the file inside.</p>
             <form onSubmit={handleUnlock} className="stack">
               <input
                 className="textinput"
@@ -346,7 +373,9 @@ export default function Space() {
                   <span className="slugname">{slug}</span>
                 </h2>
                 <p className="muted small">
-                  {files.length} file{files.length === 1 ? '' : 's'} · {humanSize(totalBytes)}
+                  {file
+                    ? `${humanSize(file.size_bytes)} · uploaded ${formatDate(file.created_at)}`
+                    : 'Empty space'}
                 </p>
               </div>
               <div className="spaceactions">
@@ -359,54 +388,79 @@ export default function Space() {
               </div>
             </div>
 
-            <UploadZone onFiles={handleFilesPicked} disabled={false} />
-
-            {uploads.length > 0 && (
-              <div className="uploads">
-                {uploads.map((u) => (
-                  <UploadItem
-                    key={u.id}
-                    item={u}
-                    onDismiss={(id) => setUploads((prev) => prev.filter((x) => x.id !== id))}
-                  />
-                ))}
+            {file ? (
+              <>
+              <div className="filecard">
+                <FileIcon name={file.file_name} />
+                <div className="filecard-main">
+                  <div className="filecard-name" title={file.file_name}>
+                    {file.file_name}
+                  </div>
+                  <div className="filecard-meta">
+                    {humanSize(file.size_bytes)} · {formatDate(file.created_at)}
+                  </div>
+                  <div className="filecard-actions">
+                    <a
+                      className="btn primary"
+                      href={downloadUrl(file.storage_path)}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download={file.file_name}
+                    >
+                      Download
+                    </a>
+                    <button className="btn danger" onClick={handleDelete}>
+                      Delete
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <p className="madewith">
+                Made with{' '}
+                <a
+                  href="https://strawhatmuse-ops.github.io/dropvault/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  DropVault
+                </a>
+              </p>
+              </>
+            ) : (
+              <div className="emptystate">
+                <div className="emptystate-icon" aria-hidden>
+                  <svg
+                    viewBox="0 0 44 52"
+                    fill="none"
+                    width="44"
+                    height="52"
+                  >
+                    <path
+                      d="M6 2h20l12 12v36H6V2z"
+                      stroke="#c9cede"
+                      strokeWidth="2.5"
+                      strokeLinejoin="round"
+                      strokeDasharray="5 4"
+                    />
+                    <path d="M26 2v12h12" stroke="#c9cede" strokeWidth="2.5" />
+                  </svg>
+                </div>
+                <h3>This space is empty</h3>
+                <p>Drop your file below — one file lives here at a time.</p>
               </div>
             )}
 
-            <section className="filelist">
-              {files.length === 0 ? (
-                <p className="muted center empty">
-                  No files yet — drop some above to get started.
-                </p>
-              ) : (
-                files.map((f) => (
-                  <div className="filerow" key={f.id}>
-                    <div className="filemeta">
-                      <span className="filename" title={f.file_name}>
-                        {f.file_name}
-                      </span>
-                      <span className="muted small">
-                        {humanSize(f.size_bytes)} · {formatDate(f.created_at)}
-                      </span>
-                    </div>
-                    <div className="filerowactions">
-                      <a
-                        className="btn small"
-                        href={downloadUrl(f.storage_path)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        download={f.file_name}
-                      >
-                        Download
-                      </a>
-                      <button className="btn small danger" onClick={() => handleDelete(f)}>
-                        Delete
-                      </button>
-                    </div>
-                  </div>
-                ))
-              )}
-            </section>
+            <UploadZone
+              mode={file ? 'replace' : 'upload'}
+              onFiles={handleFilePicked}
+              disabled={upload?.status === 'uploading'}
+            />
+
+            {upload && (
+              <div className="uploads">
+                <UploadItem item={upload} onDismiss={() => setUpload(null)} />
+              </div>
+            )}
           </>
         )}
       </main>

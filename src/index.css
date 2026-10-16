@@ -500,3 +500,295 @@ body {
     justify-content: flex-end;
   }
 }
+
+/* ---------- polished landing sections ---------- */
+
+.herobadge {
+  display: inline-block;
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--brand);
+  background: var(--brand-soft);
+  border: 1px solid #dfe3ff;
+  padding: 0.38rem 1rem;
+  border-radius: 999px;
+  margin: 0 0 1.4rem;
+}
+
+.section {
+  margin-top: 3.5rem;
+  text-align: left;
+}
+
+.sectiontitle {
+  font-size: 1.4rem;
+  letter-spacing: -0.02em;
+  margin: 0 0 1.4rem;
+  text-align: center;
+}
+
+.section .steps {
+  margin: 0;
+}
+
+.features {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 1rem;
+}
+
+.feature {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 1.35rem;
+  box-shadow: var(--shadow);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+
+.feature:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 2px 4px rgba(16, 24, 40, 0.06), 0 14px 32px -12px rgba(16, 24, 40, 0.2);
+}
+
+.featureiconwrap {
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 12px;
+  background: var(--brand-soft);
+  color: var(--brand);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 0.9rem;
+}
+
+.featureicon {
+  width: 1.3rem;
+  height: 1.3rem;
+}
+
+.feature h3 {
+  margin: 0 0 0.4rem;
+  font-size: 1rem;
+}
+
+.feature p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+.faq {
+  max-width: 40rem;
+  margin: 0 auto;
+}
+
+.faqitem {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  margin-bottom: 0.6rem;
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.faqitem summary {
+  padding: 1rem 1.25rem;
+  font-weight: 600;
+  font-size: 0.95rem;
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  transition: color 0.15s;
+}
+
+.faqitem summary::-webkit-details-marker {
+  display: none;
+}
+
+.faqitem summary::after {
+  content: '+';
+  color: var(--brand);
+  font-size: 1.3rem;
+  font-weight: 700;
+  line-height: 1;
+  flex-shrink: 0;
+}
+
+.faqitem[open] summary::after {
+  content: '–';
+}
+
+.faqitem summary:hover {
+  color: var(--brand);
+}
+
+.faqbody {
+  margin: 0;
+  padding: 0 1.25rem 1.15rem;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.65;
+}
+
+.pagefoot {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.85rem;
+  line-height: 1.6;
+  padding: 2.25rem 1.25rem 2.5rem;
+  border-top: 1px solid var(--line);
+  max-width: 900px;
+  width: 100%;
+  margin: 3.5rem auto 0;
+}
+
+/* ---------- single file card ---------- */
+
+.filecard {
+  display: flex;
+  gap: 1.4rem;
+  align-items: center;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: 1.6rem;
+  margin-bottom: 0.4rem;
+}
+
+.fileicon {
+  width: 76px;
+  height: 76px;
+  flex-shrink: 0;
+  border-radius: 18px;
+  background: var(--brand-soft);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.fileicon svg {
+  width: 40px;
+  height: 48px;
+}
+
+.filecard-main {
+  min-width: 0;
+  flex: 1;
+}
+
+.filecard-name {
+  font-size: 1.2rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-bottom: 0.3rem;
+}
+
+.filecard-meta {
+  color: var(--muted);
+  font-size: 0.88rem;
+  margin-bottom: 1.1rem;
+}
+
+.filecard-actions {
+  display: flex;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+}
+
+.madewith {
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+  margin: 0.85rem 0 1.4rem;
+}
+
+.madewith a {
+  color: var(--muted);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.madewith a:hover {
+  color: var(--brand);
+}
+
+/* ---------- intentional empty state ---------- */
+
+.emptystate {
+  border: 2px dashed #c9cede;
+  border-radius: var(--radius);
+  background: var(--surface);
+  padding: 3rem 1.5rem;
+  text-align: center;
+  margin-bottom: 1.25rem;
+}
+
+.emptystate-icon {
+  margin-bottom: 1rem;
+  opacity: 0.9;
+}
+
+.emptystate h3 {
+  margin: 0 0 0.45rem;
+  font-size: 1.15rem;
+  letter-spacing: -0.01em;
+}
+
+.emptystate p {
+  color: var(--muted);
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+/* ---------- replace-mode dropzone ---------- */
+
+.dropzone.replace {
+  padding: 1.6rem 1rem;
+  border-style: solid;
+  border-width: 1.5px;
+}
+
+.dropnote {
+  font-size: 0.82rem !important;
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* ---------- responsive polish ---------- */
+
+@media (max-width: 560px) {
+  .features {
+    grid-template-columns: 1fr;
+  }
+
+  .filecard {
+    flex-direction: column;
+    text-align: center;
+    padding: 1.75rem 1.25rem;
+  }
+
+  .filecard-main {
+    width: 100%;
+  }
+
+  .filecard-name {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+
+  .filecard-actions {
+    justify-content: center;
+  }
+}

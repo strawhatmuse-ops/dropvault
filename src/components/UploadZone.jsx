@@ -2,12 +2,13 @@ import { useRef, useState } from 'react';
 import { humanSize } from '../lib/helpers.js';
 
 /**
- * Drag-and-drop + click-to-browse upload zone.
- * Props: onFiles(FileList | File[]) -> void, disabled
+ * Drag-and-drop + click-to-browse upload zone (single file).
+ * Props: onFiles(FileList | File[]) -> void, disabled, mode: 'upload' | 'replace'
  */
-export default function UploadZone({ onFiles, disabled }) {
+export default function UploadZone({ onFiles, disabled, mode = 'upload' }) {
   const [dragging, setDragging] = useState(false);
   const inputRef = useRef(null);
+  const replace = mode === 'replace';
 
   function handleDrop(e) {
     e.preventDefault();
@@ -19,7 +20,9 @@ export default function UploadZone({ onFiles, disabled }) {
 
   return (
     <div
-      className={`dropzone${dragging ? ' dragging' : ''}${disabled ? ' disabled' : ''}`}
+      className={`dropzone${dragging ? ' dragging' : ''}${disabled ? ' disabled' : ''}${
+        replace ? ' replace' : ''
+      }`}
       onDragOver={(e) => {
         e.preventDefault();
         if (!disabled) setDragging(true);
@@ -34,17 +37,28 @@ export default function UploadZone({ onFiles, disabled }) {
       onKeyDown={(e) => {
         if ((e.key === 'Enter' || e.key === ' ') && !disabled) inputRef.current?.click();
       }}
-      aria-label="Upload files"
+      aria-label={replace ? 'Replace file' : 'Upload file'}
     >
       <div className="dropicon">⇪</div>
-      <p>
-        <strong>Drag &amp; drop files here</strong>
-      </p>
-      <p className="muted">or click to browse — multiple files welcome</p>
+      {replace ? (
+        <>
+          <p>
+            <strong>Replace file</strong>
+          </p>
+          <p className="muted">Drop a new file here or click to browse · up to 100MB</p>
+          <p className="dropnote">Uploading a new file will replace the current one.</p>
+        </>
+      ) : (
+        <>
+          <p>
+            <strong>Drag &amp; drop your file here</strong>
+          </p>
+          <p className="muted">or click to browse · up to 100MB</p>
+        </>
+      )}
       <input
         ref={inputRef}
         type="file"
-        multiple
         hidden
         onChange={(e) => {
           if (e.target.files?.length) onFiles(e.target.files);
