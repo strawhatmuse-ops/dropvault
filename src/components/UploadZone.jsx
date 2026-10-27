@@ -45,7 +45,7 @@ export default function UploadZone({ onFiles, disabled, mode = 'upload' }) {
           <p>
             <strong>Replace file</strong>
           </p>
-          <p className="muted">Drop a new file here or click to browse · up to 512MB</p>
+          <p className="muted">Drop a new file here or click to browse · up to 50MB</p>
           <p className="dropnote">Uploading a new file will replace the current one.</p>
         </>
       ) : (
@@ -53,7 +53,7 @@ export default function UploadZone({ onFiles, disabled, mode = 'upload' }) {
           <p>
             <strong>Drag &amp; drop your file here</strong>
           </p>
-          <p className="muted">or click to browse · up to 512MB</p>
+          <p className="muted">or click to browse · up to 50MB</p>
         </>
       )}
       <input

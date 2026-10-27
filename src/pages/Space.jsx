@@ -15,7 +15,7 @@ import FileIcon from '../components/FileIcon.jsx';
 
 const BUCKET = 'filedrop';
 const FILE_COLS = 'id, file_name, storage_path, size_bytes, mime_type, created_at';
-const MAX_FILE_BYTES = 512 * 1024 * 1024; // 512MB client-side cap
+const MAX_FILE_BYTES = 50 * 1024 * 1024; // 50MB — matches Supabase free-tier server limit
 let uploadSeq = 0;
 
 export default function Space() {
@@ -188,7 +188,7 @@ export default function Space() {
         name: picked.name,
         size: picked.size,
         status: 'error',
-        error: `Files up to 512MB — this one is ${humanSize(picked.size)}.`,
+        error: `Files up to 50MB — this one is ${humanSize(picked.size)}.`,
       });
       return;
     }
